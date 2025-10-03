@@ -7,6 +7,7 @@ toolchain go1.24.7
 require (
 	github.com/V4T54L/goship v0.0.0-20251003161930-bfe2bb058565
 	github.com/go-chi/chi/v5 v5.2.3
+	github.com/google/uuid v1.6.0
 )
 
 require (
