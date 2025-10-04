@@ -2,9 +2,14 @@ package domain
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
+)
+
+var (
+	ErrNotFound = errors.New("not found")
 )
 
 // UserRole defines the permission level of a user.
