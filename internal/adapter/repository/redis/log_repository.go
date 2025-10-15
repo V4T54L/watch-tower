@@ -7,43 +7,45 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/user/log-ingestor/internal/adapter/metrics"
 	"github.com/user/log-ingestor/internal/domain"
 )
 
-const (
-	logStreamKey = "log_events"
-)
+const logStreamKey = "log_events"
 
 var errNotImplemented = errors.New("method not implemented for this repository type")
 
-// LogRepository implements the domain.LogRepository interface using Redis Streams.
-// It also includes a Write-Ahead Log (WAL) for failover.
+// LogRepository implements domain.LogRepository for Redis Streams with WAL failover.
 type LogRepository struct {
 	client       *redis.Client
 	logger       *slog.Logger
 	wal          domain.WALRepository
 	dlqStreamKey string
 	isAvailable  atomic.Bool
+	metrics      *metrics.IngestMetrics
 }
 
-// NewLogRepository creates a new Redis-backed LogRepository.
+// NewLogRepository creates a new Redis LogRepository.
 // The WAL is optional; pass nil if not needed (e.g., for consumers).
-func NewLogRepository(client *redis.Client, logger *slog.Logger, group, consumer, dlqStreamKey string, wal domain.WALRepository) (*LogRepository, error) {
+func NewLogRepository(client *redis.Client, logger *slog.Logger, group, consumer, dlqStreamKey string, wal domain.WALRepository, m *metrics.IngestMetrics) (*LogRepository, error) {
 	repo := &LogRepository{
 		client:       client,
 		logger:       logger.With("component", "redis_repository"),
 		wal:          wal,
 		dlqStreamKey: dlqStreamKey,
+		metrics:      m,
 	}
 	repo.isAvailable.Store(true) // Assume available initially
 
-	if err := repo.setupConsumerGroup(context.Background(), group); err != nil {
+	if err := repo.setupConsumerGroup(context.Background(), group); err != nil && !isRedisBusyGroupError(err) {
 		repo.isAvailable.Store(false)
-		repo.logger.Error("Failed to setup consumer group, Redis may be unavailable on startup", "error", err)
+		repo.logger.Warn("Could not setup Redis consumer group on init, Redis might be down", "error", err)
+		// Don't return error, allow startup with WAL
 	}
 
 	return repo, nil
@@ -52,7 +54,7 @@ func NewLogRepository(client *redis.Client, logger *slog.Logger, group, consumer
 // StartHealthCheck starts a background goroutine to monitor Redis connectivity and trigger WAL replay.
 func (r *LogRepository) StartHealthCheck(ctx context.Context, interval time.Duration) {
 	if r.wal == nil {
-		r.logger.Info("WAL is not configured, skipping health check/replayer")
+		r.logger.Info("WAL is not configured, skipping health check routine.")
 		return
 	}
 
@@ -64,21 +66,28 @@ func (r *LogRepository) StartHealthCheck(ctx context.Context, interval time.Dura
 	for {
 		select {
 		case <-ctx.Done():
-			r.logger.Info("Stopping Redis health check")
+			r.logger.Info("Stopping Redis health check routine")
 			return
 		case <-ticker.C:
+			wasAvailable := r.isAvailable.Load()
 			err := r.client.Ping(ctx).Err()
-			if err != nil {
-				if r.isAvailable.CompareAndSwap(true, false) {
-					r.logger.Error("Redis connection lost", "error", err)
+			isCurrentlyAvailable := err == nil
+
+			if isCurrentlyAvailable && !wasAvailable {
+				r.logger.Info("Redis connection recovered. Starting WAL replay.")
+				if r.metrics != nil {
+					r.metrics.WALActive.Set(0)
 				}
-			} else {
-				if r.isAvailable.CompareAndSwap(false, true) {
-					r.logger.Info("Redis connection recovered")
-					if err := r.ReplayWAL(ctx); err != nil {
-						r.logger.Error("Failed to replay WAL after Redis recovery", "error", err)
-						r.isAvailable.Store(false)
-					}
+				if err := r.ReplayWAL(ctx); err != nil {
+					r.logger.Error("Failed to replay WAL after Redis recovery", "error", err)
+				} else {
+					r.isAvailable.Store(true)
+				}
+			} else if !isCurrentlyAvailable && wasAvailable {
+				r.logger.Warn("Redis connection lost. Activating WAL.", "error", err)
+				r.isAvailable.Store(false)
+				if r.metrics != nil {
+					r.metrics.WALActive.Set(1)
 				}
 			}
 		}
@@ -87,20 +96,29 @@ func (r *LogRepository) StartHealthCheck(ctx context.Context, interval time.Dura
 
 // ReplayWAL replays events from the WAL to Redis and truncates the WAL on success.
 func (r *LogRepository) ReplayWAL(ctx context.Context) error {
-	r.logger.Info("Attempting to replay WAL to Redis")
+	r.logger.Info("Starting WAL replay to Redis")
+	var replayedCount int
 	replayHandler := func(event domain.LogEvent) error {
-		return r.bufferLogToRedis(ctx, event)
+		if err := r.bufferLogToRedis(ctx, event); err != nil {
+			// If we can't write to Redis during replay, something is very wrong.
+			r.logger.Error("Failed to buffer event from WAL to Redis", "event_id", event.ID, "error", err)
+			return err
+		}
+		replayedCount++
+		return nil
 	}
 
 	if err := r.wal.Replay(ctx, replayHandler); err != nil {
 		return fmt.Errorf("WAL replay failed: %w", err)
 	}
 
+	r.logger.Info("WAL replay finished", "replayed_count", replayedCount)
 	if err := r.wal.Truncate(ctx); err != nil {
+		r.logger.Error("Failed to truncate WAL after successful replay", "error", err)
 		return fmt.Errorf("failed to truncate WAL after successful replay: %w", err)
 	}
 
-	r.logger.Info("WAL replay to Redis completed successfully")
+	r.logger.Info("WAL truncated successfully")
 	return nil
 }
 
@@ -119,6 +137,9 @@ func (r *LogRepository) BufferLog(ctx context.Context, event domain.LogEvent) er
 			return errors.New("redis is unavailable and WAL is not configured")
 		}
 		r.logger.Warn("Redis is unavailable, writing to WAL", "event_id", event.ID)
+		if r.metrics != nil {
+			r.metrics.WALActive.Set(1)
+		}
 		return r.wal.Write(ctx, event)
 	}
 
@@ -127,6 +148,9 @@ func (r *LogRepository) BufferLog(ctx context.Context, event domain.LogEvent) er
 		if isNetworkError(err) {
 			if r.isAvailable.CompareAndSwap(true, false) {
 				r.logger.Error("Redis connection lost during write", "error", err)
+				if r.metrics != nil {
+					r.metrics.WALActive.Set(1)
+				}
 			}
 			if r.wal == nil {
 				return fmt.Errorf("redis became unavailable and WAL is not configured: %w", err)
@@ -226,10 +250,10 @@ func (r *LogRepository) MoveToDLQ(ctx context.Context, events []domain.LogEvent)
 		args := &redis.XAddArgs{
 			Stream: r.dlqStreamKey,
 			Values: map[string]interface{}{
-				"payload":         payload,
-				"original_stream": logStreamKey,
-				"original_msg_id": event.StreamMessageID,
-				"failed_at":       time.Now().UTC().Format(time.RFC3339),
+				"payload":           payload,
+				"original_event_id": event.ID,
+				"original_stream":   logStreamKey,
+				// "failed_at":       time.Now().UTC().Format(time.RFC3339), // Removed as per attempted content
 			},
 		}
 		pipe.XAdd(ctx, args)
@@ -249,11 +273,18 @@ func (r *LogRepository) WriteLogBatch(ctx context.Context, events []domain.LogEv
 }
 
 func isRedisBusyGroupError(err error) bool {
-	return err != nil && err.Error() == "BUSYGROUP Consumer Group name already exists"
+	return err != nil && strings.HasPrefix(err.Error(), "BUSYGROUP")
 }
 
 func isNetworkError(err error) bool {
-	var netErr net.Error
-	return errors.As(err, &netErr) || errors.Is(err, redis.ErrClosed) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+	if err == nil {
+		return false
+	}
+	return errors.Is(err, net.ErrClosed) ||
+		errors.Is(err, context.Canceled) ||
+		errors.Is(err, context.DeadlineExceeded) ||
+		strings.Contains(err.Error(), "i/o timeout") ||
+		strings.Contains(err.Error(), "connection refused") ||
+		errors.Is(err, redis.ErrClosed) // Keep original redis.ErrClosed
 }
 

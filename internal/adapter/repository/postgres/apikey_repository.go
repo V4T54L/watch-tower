@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/user/log-ingestor/internal/adapter/metrics"
 )
 
 type cacheEntry struct {
@@ -21,15 +23,17 @@ type APIKeyRepository struct {
 	cache    map[string]cacheEntry
 	mu       sync.RWMutex
 	cacheTTL time.Duration
+	metrics  *metrics.IngestMetrics
 }
 
 // NewAPIKeyRepository creates a new instance of the PostgreSQL API key repository.
-func NewAPIKeyRepository(db *sql.DB, logger *slog.Logger, cacheTTL time.Duration) *APIKeyRepository {
+func NewAPIKeyRepository(db *sql.DB, logger *slog.Logger, cacheTTL time.Duration, m *metrics.IngestMetrics) *APIKeyRepository {
 	return &APIKeyRepository{
 		db:       db,
 		logger:   logger,
 		cache:    make(map[string]cacheEntry),
 		cacheTTL: cacheTTL,
+		metrics:  m,
 	}
 }
 
@@ -39,17 +43,24 @@ func (r *APIKeyRepository) IsValid(ctx context.Context, key string) (bool, error
 	// 1. Check cache with a read lock
 	r.mu.RLock()
 	entry, found := r.cache[key]
-	if found && time.Now().Before(entry.expiresAt) {
-		r.mu.RUnlock()
-		return entry.isValid, nil
-	}
 	r.mu.RUnlock()
 
-	// 2. If not in cache or expired, query DB and update cache with a write lock
+	if found && time.Now().Before(entry.expiresAt) {
+		if r.metrics != nil {
+			r.metrics.APIKeyCacheHits.Inc()
+		}
+		return entry.isValid, nil
+	}
+
+	// 2. Cache miss or expired, query DB and update cache with a write lock
+	if r.metrics != nil {
+		r.metrics.APIKeyCacheMisses.Inc()
+	}
+
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// 2a. Double-check cache in case another goroutine populated it while waiting for the lock
+	// Double-check cache in case another goroutine populated it while waiting for the lock
 	entry, found = r.cache[key]
 	if found && time.Now().Before(entry.expiresAt) {
 		return entry.isValid, nil
@@ -74,4 +85,4 @@ func (r *APIKeyRepository) IsValid(ctx context.Context, key string) (bool, error
 
 	return isValid, nil
 }
-```
+
