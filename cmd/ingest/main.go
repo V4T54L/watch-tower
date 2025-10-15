@@ -8,14 +8,16 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings" // Keep strings for PII redaction fields split
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
+
 	"github.com/user/log-ingestor/internal/adapter/api"
 	"github.com/user/log-ingestor/internal/adapter/api/handler"
+	"github.com/user/log-ingestor/internal/adapter/api/middleware"
 	"github.com/user/log-ingestor/internal/adapter/metrics"
 	"github.com/user/log-ingestor/internal/adapter/pii"
 	"github.com/user/log-ingestor/internal/adapter/repository/postgres"
@@ -31,111 +33,116 @@ import (
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
-		slog.Error("Failed to load config", "error", err)
+		slog.Error("failed to load config", "error", err)
 		os.Exit(1)
 	}
 
-	appLogger := logger.New(cfg.LogLevel)
-	appLogger.Info("Configuration loaded")
+	logger := logger.New(cfg.LogLevel)
+	slog.SetDefault(logger)
 
-	// --- Observability Setup ---
 	m := metrics.NewIngestMetrics()
+
+	// --- Start Admin and Metrics Server ---
 	adminMux := http.NewServeMux()
 	adminMux.Handle("/metrics", promhttp.Handler())
+
 	adminServer := &http.Server{
-		Addr:    ":9091", // Separate port for admin/metrics
+		Addr:    ":9091",
 		Handler: adminMux,
 	}
+
 	go func() {
-		appLogger.Info("Starting admin/metrics server", "addr", adminServer.Addr)
-		if err := adminServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			appLogger.Error("Admin server failed", "error", err)
+		logger.Info("starting admin & metrics server", "addr", adminServer.Addr)
+		if err := adminServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error("admin & metrics server failed", "error", err)
 		}
 	}()
 
-	// --- Context and Signal Handling for Graceful Shutdown ---
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	// --- Graceful Shutdown Context ---
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// Database Connection
+	// --- Database and Redis Connections ---
 	db, err := sql.Open("postgres", cfg.PostgresURL)
 	if err != nil {
-		appLogger.Error("Failed to connect to PostgreSQL", "error", err)
+		logger.Error("failed to connect to postgres", "error", err)
 		os.Exit(1)
 	}
 	defer db.Close()
 
-	// Redis Client
-	redisClient := redis.NewClient(&redis.Options{
-		Addr: cfg.RedisAddr,
-	})
-	if _, err := redisClient.Ping(ctx).Result(); err != nil {
-		appLogger.Warn("Could not connect to Redis on startup, will rely on WAL", "error", err)
+	redisOpts, err := redis.ParseURL(cfg.RedisAddr)
+	if err != nil {
+		logger.Error("failed to parse redis url", "error", err)
+		os.Exit(1)
+	}
+	redisClient := redis.NewClient(redisOpts)
+	if err := redisClient.Ping(ctx).Err(); err != nil {
+		logger.Warn("could not connect to redis, will proceed in WAL-only mode", "error", err)
 	}
 
-	// WAL Repository
-	walRepo, err := wal.NewWALRepository(cfg.WALPath, cfg.WALSegmentSize, cfg.WALMaxDiskSize, appLogger)
+	// --- Initialize Repositories ---
+	walRepo, err := wal.NewWALRepository(cfg.WALPath, cfg.WALSegmentSize, cfg.WALMaxDiskSize, logger)
 	if err != nil {
-		appLogger.Error("Failed to initialize WAL repository", "error", err)
+		logger.Error("failed to initialize WAL repository", "error", err)
 		os.Exit(1)
 	}
 	defer walRepo.Close()
 
-	// Repositories
-	apiKeyRepo := postgres.NewAPIKeyRepository(db, appLogger, cfg.APIKeyCacheTTL, m)
-	redisRepo, err := redisrepo.NewLogRepository(redisClient, appLogger, "ingest-group", "ingest-consumer", cfg.RedisDLQStream, walRepo, m)
-	if err != nil {
-		appLogger.Error("Failed to initialize Redis repository", "error", err)
+	apiKeyRepo := postgres.NewAPIKeyRepository(db, logger, cfg.APIKeyCacheTTL, m)
+	redisLogRepo, err := redisrepo.NewLogRepository(redisClient, logger, "log-processors", "ingest-service", cfg.RedisDLQStream, walRepo, m)
+	if err != nil && !errors.Is(err, redisrepo.ErrRedisNotAvailable) {
+		logger.Error("failed to initialize redis log repository", "error", err)
 		os.Exit(1)
 	}
 
-	// Start Redis health checker and WAL replayer in the background
-	go redisRepo.StartHealthCheck(ctx, 5*time.Second)
+	// Start Redis health check and WAL replay loop
+	go redisLogRepo.StartHealthCheck(ctx, 5*time.Second)
 
-	// PII Redactor
-	piiFields := strings.Split(cfg.PIIRedactionFields, ",") // Keep original way of getting fields
-	redactor := pii.NewRedactor(piiFields, appLogger)
+	// --- Initialize Admin API ---
+	redisAdminRepo := redisrepo.NewAdminRepository(redisClient, logger)
+	adminUseCase := usecase.NewAdminStreamUseCase(redisAdminRepo)
+	adminRouter := api.NewAdminRouter(adminUseCase, logger)
+	adminMux.Handle("/", adminRouter) // Mount admin router at the root of the admin server
 
-	// Use Case
-	ingestUseCase := usecase.NewIngestLogUseCase(redisRepo, redactor, appLogger)
+	// --- Initialize Use Cases and Services ---
+	piiRedactor := pii.NewRedactor(strings.Split(cfg.PIIRedactionFields, ","), logger)
+	ingestUseCase := usecase.NewIngestLogUseCase(redisLogRepo, piiRedactor, logger)
 
-	// --- SSE Broker ---
-	sseBroker := handler.NewSSEBroker(ctx, appLogger)
+	// --- Initialize SSE Broker ---
+	sseBroker := handler.NewSSEBroker(ctx, logger)
 
-	// HTTP Server
-	router := api.NewRouter(cfg, appLogger, apiKeyRepo, ingestUseCase, m, sseBroker)
-	server := &http.Server{
+	// --- Initialize Ingest Server ---
+	ingestRouter := api.NewRouter(cfg, logger, apiKeyRepo, ingestUseCase, m, sseBroker)
+	ingestServer := &http.Server{
 		Addr:         cfg.IngestServerAddr,
-		Handler:      router,
+		Handler:      middleware.Logging(logger)(ingestRouter),
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  15 * time.Second,
 	}
 
 	go func() {
-		appLogger.Info("Starting ingest server", "addr", server.Addr)
-		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			appLogger.Error("Ingest server failed", "error", err)
+		logger.Info("starting ingest server", "addr", ingestServer.Addr)
+		if err := ingestServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error("ingest server failed", "error", err)
 			stop() // Trigger shutdown on server error
 		}
 	}()
 
-	// Graceful Shutdown
+	// --- Wait for shutdown signal ---
 	<-ctx.Done()
-	appLogger.Info("Shutdown signal received, starting graceful shutdown")
+	logger.Info("shutting down servers...")
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		appLogger.Error("Ingest server shutdown failed", "error", err)
-	} else {
-		appLogger.Info("Ingest server shut down gracefully")
-	}
+	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancelShutdown()
 
 	if err := adminServer.Shutdown(shutdownCtx); err != nil {
-		appLogger.Error("Admin server shutdown failed", "error", err)
-	} else {
-		appLogger.Info("Admin server shut down gracefully")
+		logger.Error("admin server shutdown failed", "error", err)
 	}
+	if err := ingestServer.Shutdown(shutdownCtx); err != nil {
+		logger.Error("ingest server shutdown failed", "error", err)
+	}
+
+	logger.Info("servers shut down gracefully")
 }
+
