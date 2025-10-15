@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"log"
 	"log/slog"
 	"net/http"
 	"os"
@@ -11,93 +12,95 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/lib/pq" // PostgreSQL driver
 	"github.com/redis/go-redis/v9"
 	"github.com/user/log-ingestor/internal/adapter/api"
-	pii_adapter "github.com/user/log-ingestor/internal/adapter/pii"
-	postgres_repo "github.com/user/log-ingestor/internal/adapter/repository/postgres"
-	redis_repo "github.com/user/log-ingestor/internal/adapter/repository/redis"
+	"github.com/user/log-ingestor/internal/adapter/pii"
+	"github.com/user/log-ingestor/internal/adapter/repository/postgres"
+	redisrepo "github.com/user/log-ingestor/internal/adapter/repository/redis"
+	"github.com/user/log-ingestor/internal/adapter/repository/wal"
 	"github.com/user/log-ingestor/internal/pkg/config"
 	"github.com/user/log-ingestor/internal/pkg/logger"
 	"github.com/user/log-ingestor/internal/usecase"
+
+	_ "github.com/lib/pq"
 )
 
 func main() {
-	// 1. Load configuration
 	cfg, err := config.Load()
 	if err != nil {
-		// Use slog here because the custom logger 'log' is not yet initialized.
-		slog.Error("failed to load configuration", "error", err)
-		os.Exit(1)
+		log.Fatalf("failed to load config: %v", err)
 	}
 
-	// 2. Initialize logger
-	log := logger.New(cfg.LogLevel)
-	log.Info("starting ingest gateway")
-	defer log.Info("ingest gateway shut down")
+	appLogger := logger.New(cfg.LogLevel)
 
-	// 3. Initialize dependencies (DB, Redis, etc.)
-	// PostgreSQL
+	// Database Connection
 	db, err := sql.Open("postgres", cfg.PostgresURL)
 	if err != nil {
-		log.Error("failed to connect to postgres", "error", err)
-		os.Exit(1)
+		log.Fatalf("failed to connect to postgres: %v", err)
 	}
 	defer db.Close()
-	if err := db.Ping(); err != nil {
-		log.Error("failed to ping postgres", "error", err)
-		os.Exit(1)
-	}
 
-	// Redis
+	// Redis Client
 	redisClient := redis.NewClient(&redis.Options{
 		Addr: cfg.RedisAddr,
 	})
-	if _, err := redisClient.Ping(context.Background()).Result(); err != nil {
-		log.Error("failed to connect to redis", "error", err)
-		// TODO: In a future step, this should trigger WAL mode instead of exiting.
-		os.Exit(1)
+	if err := redisClient.Ping(context.Background()).Err(); err != nil {
+		appLogger.Warn("Could not connect to Redis on startup, will operate in degraded mode", "error", err)
 	}
-	defer redisClient.Close()
 
-	// 4. Initialize repositories
-	apiKeyRepo := postgres_repo.NewAPIKeyRepository(db, log, cfg.APIKeyCacheTTL)
-	logRepo := redis_repo.NewLogRepository(redisClient, log)
-	// TODO: Initialize WAL repository
+	// WAL Repository
+	walRepo, err := wal.NewWALRepository(cfg.WALPath, cfg.WALSegmentSize, cfg.WALMaxDiskSize, appLogger)
+	if err != nil {
+		log.Fatalf("failed to initialize WAL repository: %v", err)
+	}
+	defer walRepo.Close()
 
-	// 5. Initialize adapters
+	// Repositories
+	apiKeyRepo := postgres.NewAPIKeyRepository(db, appLogger, cfg.APIKeyCacheTTL)
+	redisRepo, err := redisrepo.NewLogRepository(redisClient, appLogger, "ingest-group", "ingest-worker", cfg.RedisDLQStream, walRepo)
+	if err != nil {
+		log.Fatalf("failed to create redis log repository: %v", err)
+	}
+
+	// Start Redis health checker and WAL replayer in the background
+	appCtx, cancelApp := context.WithCancel(context.Background())
+	defer cancelApp()
+	go redisRepo.StartHealthCheck(appCtx, 10*time.Second)
+
+	// PII Redactor
 	piiFields := strings.Split(cfg.PIIRedactionFields, ",")
-	piiRedactor := pii_adapter.NewRedactor(piiFields, log)
+	redactor := pii.NewRedactor(piiFields, appLogger)
 
-	// 6. Initialize use cases
-	ingestUseCase := usecase.NewIngestLogUseCase(logRepo, piiRedactor, log)
+	// Use Case
+	ingestUseCase := usecase.NewIngestLogUseCase(redisRepo, redactor, appLogger)
 
-	// 7. Setup HTTP router and server
-	router := api.NewRouter(cfg, log, apiKeyRepo, ingestUseCase)
+	// HTTP Server
+	router := api.NewRouter(cfg, appLogger, apiKeyRepo, ingestUseCase)
 	server := &http.Server{
 		Addr:    cfg.IngestServerAddr,
 		Handler: router,
 	}
 
-	// 8. Start server and handle graceful shutdown
 	go func() {
-		log.Info("server listening", "addr", cfg.IngestServerAddr)
+		appLogger.Info("Starting ingest server", "addr", server.Addr)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Error("server failed to start", "error", err)
-			os.Exit(1)
+			log.Fatalf("could not listen on %s: %v\n", server.Addr, err)
 		}
 	}()
 
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-	log.Info("shutting down server...")
+	// Graceful Shutdown
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+	<-stop
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	appLogger.Info("Shutting down server...")
 
-	if err := server.Shutdown(ctx); err != nil {
-		log.Error("server shutdown failed", "error", err)
-		os.Exit(1)
+	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelShutdown()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Fatalf("Server Shutdown Failed:%+v", err)
 	}
+	appLogger.Info("Server gracefully stopped")
 }
+
