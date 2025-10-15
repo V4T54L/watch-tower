@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log Ingestor - Live Metrics</title>
+    <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Log Ingestor Metrics</h1>
+            <div class="status">
+                <span>Status:</span>
+                <div id="status-indicator" class="reconnecting"></div>
+                <span id="status-text">Connecting...</span>
+            </div>
+        </header>
+        <main>
+            <div class="metric-card">
+                <h2>Live Ingest Rate</h2>
+                <p><span id="ingest-rate">0.00</span> events/sec</p>
+                <div id="sparkline-container">
+                    <div id="sparkline"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/ui.js"></script>
+    <script src="js/sse_client.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
+
