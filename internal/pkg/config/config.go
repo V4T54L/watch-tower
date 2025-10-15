@@ -7,32 +7,23 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// Config holds all configuration for the application, loaded from environment variables.
+// Config holds all application configuration.
 type Config struct {
-	LogLevel       string `env:"LOG_LEVEL" envDefault:"info"`
-	MaxEventSize   int64  `env:"MAX_EVENT_SIZE_BYTES" envDefault:"1048576"` // 1MB
-	WALSegmentSize int64  `env:"WAL_SEGMENT_SIZE_BYTES" envDefault:"104857600"` // 100MB
-	WALMaxDiskSize int64  `env:"WAL_MAX_DISK_SIZE_BYTES" envDefault:"1073741824"` // 1GB
-
-	// BackpressurePolicy defines how the ingest API behaves when internal buffers are full.
-	// Supported values: "block", "429", "drop".
-	BackpressurePolicy string `env:"BACKPRESSURE_POLICY" envDefault:"429"`
-
-	// Redis configuration
-	RedisAddr string `env:"REDIS_ADDR,required"`
-
-	// PostgreSQL configuration
-	PostgresURL string `env:"POSTGRES_URL,required"`
-
-	// API Key Cache configuration
-	APIKeyCacheTTL time.Duration `env:"API_KEY_CACHE_TTL" envDefault:"5m"`
+	LogLevel           string        `env:"LOG_LEVEL" envDefault:"info"`
+	MaxEventSize       int64         `env:"MAX_EVENT_SIZE_BYTES" envDefault:"1048576"` // 1MB
+	WALSegmentSize     int64         `env:"WAL_SEGMENT_SIZE_BYTES" envDefault:"104857600"` // 100MB
+	WALMaxDiskSize     int64         `env:"WAL_MAX_DISK_SIZE_BYTES" envDefault:"1073741824"` // 1GB
+	BackpressurePolicy string        `env:"BACKPRESSURE_POLICY" envDefault:"block"`
+	RedisAddr          string        `env:"REDIS_ADDR,required"`
+	PostgresURL        string        `env:"POSTGRES_URL,required"`
+	APIKeyCacheTTL     time.Duration `env:"API_KEY_CACHE_TTL" envDefault:"5m"`
+	PIIRedactionFields string        `env:"PII_REDACTION_FIELDS" envDefault:"email,password,credit_card,ssn"`
+	IngestServerAddr   string        `env:"INGEST_SERVER_ADDR" envDefault:":8080"`
 }
 
-// Load parses environment variables into the Config struct.
-// It also loads a .env file if it exists, for local development.
+// Load reads configuration from environment variables.
 func Load() (*Config, error) {
-	// Load .env file if it exists. This is useful for local development.
-	// In production, environment variables should be set directly.
+	// Attempt to load .env file for local development.
 	_ = godotenv.Load()
 
 	cfg := &Config{}
