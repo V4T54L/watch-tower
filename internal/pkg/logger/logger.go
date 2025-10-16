@@ -32,4 +32,3 @@ func New(level string) *slog.Logger {
 
 	return logger
 }
-```

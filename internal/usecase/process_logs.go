@@ -6,7 +6,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/user/log-ingestor/internal/domain"
+	"github.com/V4T54L/watch-tower/internal/domain"
 )
 
 const (
@@ -101,4 +101,3 @@ func (u *ProcessLogsUseCase) writeWithRetry(ctx context.Context, events []domain
 	}
 	return lastErr
 }
-

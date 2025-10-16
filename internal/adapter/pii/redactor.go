@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 
-	"github.com/user/log-ingestor/internal/domain"
+	"github.com/V4T54L/watch-tower/internal/domain"
 )
 
 const RedactedPlaceholder = "[REDACTED]"
@@ -62,4 +62,3 @@ func (r *Redactor) Redact(event *domain.LogEvent) error {
 
 	return nil
 }
-

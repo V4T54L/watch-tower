@@ -7,9 +7,9 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/user/log-ingestor/internal/adapter/pii"
-	"github.com/user/log-ingestor/internal/domain"
-	"github.com/user/log-ingestor/internal/domain/mocks"
+	"github.com/V4T54L/watch-tower/internal/adapter/pii"
+	"github.com/V4T54L/watch-tower/internal/domain"
+	"github.com/V4T54L/watch-tower/internal/domain/mocks"
 )
 
 func TestIngestLogUseCase_Ingest(t *testing.T) {
@@ -79,4 +79,3 @@ func TestIngestLogUseCase_Ingest(t *testing.T) {
 		}
 	})
 }
-

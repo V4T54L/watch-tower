@@ -1,4 +1,3 @@
-```go
 package handler
 
 import (
@@ -144,5 +143,3 @@ func (b *SSEBroker) run(ctx context.Context) {
 		}
 	}
 }
-```
-

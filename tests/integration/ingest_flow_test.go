@@ -2,7 +2,6 @@ package integration
 
 import (
 	"bytes"
-	"context"
 	"database/sql"
 	"fmt"
 	"net/http"
@@ -151,4 +150,3 @@ func TestIngestionFlow(t *testing.T) {
 		t.Fatalf("Idempotency test failed: expected count to remain %d, but got %d", batchSize, idempotentCount)
 	}
 }
-

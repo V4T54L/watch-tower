@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/user/log-ingestor/internal/domain"
+	"github.com/V4T54L/watch-tower/internal/domain"
 )
 
 const APIKeyHeader = "X-API-Key"
@@ -38,4 +38,3 @@ func Auth(repo domain.APIKeyRepository, logger *slog.Logger) func(http.Handler) 
 		})
 	}
 }
-

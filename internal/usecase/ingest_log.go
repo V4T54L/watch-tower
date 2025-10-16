@@ -5,21 +5,26 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/V4T54L/watch-tower/internal/adapter/pii"
+	"github.com/V4T54L/watch-tower/internal/domain"
 	"github.com/google/uuid"
-	"github.com/user/log-ingestor/internal/adapter/pii"
-	"github.com/user/log-ingestor/internal/domain"
 )
 
-// IngestLogUseCase handles the business logic for ingesting a log event.
-type IngestLogUseCase struct {
+// ingestLogUseCase interface for handling the business logic for ingesting a log event.
+type IngestLogUseCase interface {
+	Ingest(ctx context.Context, event *domain.LogEvent) error
+}
+
+// ingestLogUseCase handles the business logic for ingesting a log event.
+type ingestLogUseCase struct {
 	repo     domain.LogRepository
 	redactor *pii.Redactor
 	logger   *slog.Logger
 }
 
 // NewIngestLogUseCase creates a new IngestLogUseCase.
-func NewIngestLogUseCase(repo domain.LogRepository, redactor *pii.Redactor, logger *slog.Logger) *IngestLogUseCase {
-	return &IngestLogUseCase{
+func NewIngestLogUseCase(repo domain.LogRepository, redactor *pii.Redactor, logger *slog.Logger) IngestLogUseCase {
+	return &ingestLogUseCase{
 		repo:     repo,
 		redactor: redactor,
 		logger:   logger,
@@ -27,7 +32,7 @@ func NewIngestLogUseCase(repo domain.LogRepository, redactor *pii.Redactor, logg
 }
 
 // Ingest validates, enriches, redacts, and buffers a log event.
-func (uc *IngestLogUseCase) Ingest(ctx context.Context, event *domain.LogEvent) error {
+func (uc *ingestLogUseCase) Ingest(ctx context.Context, event *domain.LogEvent) error {
 	// 1. Enrich with server-side data
 	event.ReceivedAt = time.Now().UTC()
 	if event.ID == "" {
@@ -49,4 +54,3 @@ func (uc *IngestLogUseCase) Ingest(ctx context.Context, event *domain.LogEvent) 
 
 	return nil
 }
-

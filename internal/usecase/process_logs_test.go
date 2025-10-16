@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/user/log-ingestor/internal/domain"
-	"github.com/user/log-ingestor/internal/domain/mocks"
+	"github.com/V4T54L/watch-tower/internal/domain"
+	"github.com/V4T54L/watch-tower/internal/domain/mocks"
 )
 
 func TestProcessLogsUseCase_ProcessBatch(t *testing.T) {
@@ -101,4 +101,3 @@ func TestProcessLogsUseCase_ProcessBatch(t *testing.T) {
 		}
 	})
 }
-

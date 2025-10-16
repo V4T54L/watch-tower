@@ -5,12 +5,10 @@ import (
 	"encoding/json"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"testing"
-	"time"
 
+	"github.com/V4T54L/watch-tower/internal/domain"
 	"github.com/google/uuid"
-	"github.com/user/log-ingestor/internal/domain"
 )
 
 func setupTestWAL(t *testing.T, maxSegmentSize, maxTotalSize int64) (*WALRepository, func()) {
@@ -151,4 +149,3 @@ func TestWAL_MaxTotalSize(t *testing.T) {
 		t.Fatal("expected an error when writing beyond max total size, but got nil")
 	}
 }
-

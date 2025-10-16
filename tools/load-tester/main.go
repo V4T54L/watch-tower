@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -86,4 +87,3 @@ func main() {
 	log.Printf("Errors: %d", errorCount.Load())
 	log.Printf("Actual RPS: %.2f", actualRPS)
 }
-```

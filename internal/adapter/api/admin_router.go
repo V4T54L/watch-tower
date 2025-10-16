@@ -4,8 +4,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/user/log-ingestor/internal/adapter/api/handler"
-	"github.comcom/user/log-ingestor/internal/usecase"
+	"github.com/V4T54L/watch-tower/internal/adapter/api/handler"
+	"github.com/V4T54L/watch-tower/internal/usecase"
 )
 
 // NewAdminRouter creates and configures the HTTP router for admin operations.
@@ -31,4 +31,3 @@ func NewAdminRouter(adminUseCase *usecase.AdminStreamUseCase, logger *slog.Logge
 
 	return mux
 }
-

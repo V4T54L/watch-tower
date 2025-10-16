@@ -1,7 +1,7 @@
 .PHONY: all build test lint clean docker-build docker-push compose-up compose-down compose-logs help
 
 # Variables
-APP_NAME := log-ingestor
+APP_NAME := watch-tower
 INGEST_IMG_NAME := ${APP_NAME}-ingest
 CONSUMER_IMG_NAME := ${APP_NAME}-consumer
 TAG ?= latest

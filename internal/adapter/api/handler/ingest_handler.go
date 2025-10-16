@@ -10,9 +10,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/user/log-ingestor/internal/adapter/metrics"
-	"github.com/user/log-ingestor/internal/domain"
-	"github.com/user/log-ingestor/internal/usecase"
+	"github.com/V4T54L/watch-tower/internal/adapter/metrics"
+	"github.com/V4T54L/watch-tower/internal/domain"
+	"github.com/V4T54L/watch-tower/internal/usecase"
 )
 
 const (
@@ -22,7 +22,7 @@ const (
 
 // IngestHandler handles HTTP requests for log ingestion.
 type IngestHandler struct {
-	useCase      *usecase.IngestLogUseCase
+	useCase      usecase.IngestLogUseCase
 	logger       *slog.Logger
 	maxEventSize int64
 	metrics      *metrics.IngestMetrics
@@ -30,7 +30,7 @@ type IngestHandler struct {
 }
 
 // NewIngestHandler creates a new IngestHandler.
-func NewIngestHandler(uc *usecase.IngestLogUseCase, logger *slog.Logger, maxEventSize int64, m *metrics.IngestMetrics, sse *SSEBroker) *IngestHandler {
+func NewIngestHandler(uc usecase.IngestLogUseCase, logger *slog.Logger, maxEventSize int64, m *metrics.IngestMetrics, sse *SSEBroker) *IngestHandler {
 	return &IngestHandler{
 		useCase:      uc,
 		logger:       logger,
@@ -140,4 +140,3 @@ func (h *IngestHandler) handleNDJSON(ctx context.Context, body io.Reader) error 
 
 	return nil
 }
-

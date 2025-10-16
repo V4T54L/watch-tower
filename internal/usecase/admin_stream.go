@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/user/log-ingestor/internal/domain"
+	"github.com/V4T54L/watch-tower/internal/domain"
 )
 
 // AdminStreamUseCase provides use cases for stream administration.
@@ -50,4 +50,3 @@ func (uc *AdminStreamUseCase) AcknowledgeMessages(ctx context.Context, stream, g
 func (uc *AdminStreamUseCase) TrimStream(ctx context.Context, stream string, maxLen int64) (int64, error) {
 	return uc.repo.TrimStream(ctx, stream, maxLen)
 }
-

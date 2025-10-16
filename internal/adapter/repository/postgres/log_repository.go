@@ -6,11 +6,11 @@ import (
 	"errors"
 	"log/slog"
 
+	"github.com/V4T54L/watch-tower/internal/domain"
 	"github.com/lib/pq"
-	"github.com/user/log-ingestor/internal/domain"
 )
 
-const logsTableName = "logs"
+// const logsTableName = "logs"
 
 // LogRepository implements the sink part of the domain.LogRepository interface for PostgreSQL.
 type LogRepository struct {
@@ -19,7 +19,7 @@ type LogRepository struct {
 }
 
 // NewLogRepository creates a new PostgreSQL log repository.
-func NewLogRepository(db *sql.DB, logger *slog.Logger) *LogRepository {
+func NewLogRepository(db *sql.DB, logger *slog.Logger) domain.LogRepository {
 	return &LogRepository{db: db, logger: logger}
 }
 
@@ -97,3 +97,6 @@ func (r *LogRepository) AcknowledgeLogs(ctx context.Context, group string, messa
 	return errNotImplemented
 }
 
+func (r *LogRepository) MoveToDLQ(ctx context.Context, events []domain.LogEvent) error {
+	return errNotImplemented
+}

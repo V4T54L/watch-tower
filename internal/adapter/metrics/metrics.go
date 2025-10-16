@@ -1,4 +1,3 @@
-```go
 package metrics
 
 import (
@@ -50,5 +49,3 @@ func NewIngestMetrics() *IngestMetrics {
 		}),
 	}
 }
-```
-

@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/user/log-ingestor/internal/domain"
+	"github.com/V4T54L/watch-tower/internal/domain"
 )
 
 const (
@@ -275,4 +275,3 @@ func (w *WALRepository) Close() error {
 	}
 	return nil
 }
-

@@ -4,12 +4,12 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/user/log-ingestor/internal/adapter/api/handler"
-	"github.com/user/log-ingestor/internal/adapter/api/middleware"
-	"github.com/user/log-ingestor/internal/adapter/metrics"
-	"github.com/user/log-ingestor/internal/domain"
-	"github.com/user/log-ingestor/internal/pkg/config"
-	"github.com/user/log-ingestor/internal/usecase"
+	"github.com/V4T54L/watch-tower/internal/adapter/api/handler"
+	"github.com/V4T54L/watch-tower/internal/adapter/api/middleware"
+	"github.com/V4T54L/watch-tower/internal/adapter/metrics"
+	"github.com/V4T54L/watch-tower/internal/domain"
+	"github.com/V4T54L/watch-tower/internal/pkg/config"
+	"github.com/V4T54L/watch-tower/internal/usecase"
 )
 
 // NewRouter creates and configures the main HTTP router for the ingest service.
@@ -17,7 +17,7 @@ func NewRouter(
 	cfg *config.Config,
 	logger *slog.Logger,
 	apiKeyRepo domain.APIKeyRepository,
-	ingestUseCase *usecase.IngestLogUseCase,
+	ingestUseCase usecase.IngestLogUseCase,
 	m *metrics.IngestMetrics,
 	sseBroker *handler.SSEBroker,
 ) http.Handler {
@@ -40,4 +40,3 @@ func NewRouter(
 
 	return mux
 }
-

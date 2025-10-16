@@ -11,14 +11,15 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/V4T54L/watch-tower/internal/adapter/metrics"
+	"github.com/V4T54L/watch-tower/internal/domain"
 	"github.com/redis/go-redis/v9"
-	"github.com/user/log-ingestor/internal/adapter/metrics"
-	"github.com/user/log-ingestor/internal/domain"
 )
 
 const logStreamKey = "log_events"
 
 var errNotImplemented = errors.New("method not implemented for this repository type")
+var ErrRedisNotAvailable = errors.New("redis not available")
 
 // LogRepository implements domain.LogRepository for Redis Streams with WAL failover.
 type LogRepository struct {
@@ -287,4 +288,3 @@ func isNetworkError(err error) bool {
 		strings.Contains(err.Error(), "connection refused") ||
 		errors.Is(err, redis.ErrClosed) // Keep original redis.ErrClosed
 }
-

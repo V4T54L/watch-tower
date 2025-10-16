@@ -1,6 +1,8 @@
-module github.com/user/log-ingestor
+module github.com/V4T54L/watch-tower
 
-go 1.21
+go 1.24.0
+
+toolchain go1.24.5
 
 require (
 	github.com/caarlos0/env/v10 v10.0.0
@@ -9,6 +11,7 @@ require (
 	github.com/lib/pq v1.10.9
 	github.com/prometheus/client_golang v1.19.0
 	github.com/redis/go-redis/v9 v9.5.1
+	golang.org/x/time v0.14.0
 )
 
 require (
@@ -21,4 +24,3 @@ require (
 	golang.org/x/sys v0.16.0 // indirect
 	google.golang.org/protobuf v1.32.0 // indirect
 )
-

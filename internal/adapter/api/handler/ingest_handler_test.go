@@ -8,12 +8,10 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
-	"github.com/user/log-ingestor/internal/adapter/metrics"
-	"github.com/user/log-ingestor/internal/domain"
-	"github.com/user/log-ingestor/internal/usecase"
+	"github.com/V4T54L/watch-tower/internal/adapter/metrics"
+	"github.com/V4T54L/watch-tower/internal/domain"
 )
 
 // MockIngestUseCase is a mock implementation of the IngestLogUseCase.
@@ -140,4 +138,3 @@ func TestIngestHandler(t *testing.T) {
 		})
 	}
 }
-

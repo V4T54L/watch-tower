@@ -15,17 +15,17 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/user/log-ingestor/internal/adapter/api"
-	"github.com/user/log-ingestor/internal/adapter/api/handler"
-	"github.com/user/log-ingestor/internal/adapter/api/middleware"
-	"github.com/user/log-ingestor/internal/adapter/metrics"
-	"github.com/user/log-ingestor/internal/adapter/pii"
-	"github.com/user/log-ingestor/internal/adapter/repository/postgres"
-	redisrepo "github.com/user/log-ingestor/internal/adapter/repository/redis"
-	"github.com/user/log-ingestor/internal/adapter/repository/wal"
-	"github.com/user/log-ingestor/internal/pkg/config"
-	"github.com/user/log-ingestor/internal/pkg/logger"
-	"github.com/user/log-ingestor/internal/usecase"
+	"github.com/V4T54L/watch-tower/internal/adapter/api"
+	"github.com/V4T54L/watch-tower/internal/adapter/api/handler"
+	"github.com/V4T54L/watch-tower/internal/adapter/api/middleware"
+	"github.com/V4T54L/watch-tower/internal/adapter/metrics"
+	"github.com/V4T54L/watch-tower/internal/adapter/pii"
+	"github.com/V4T54L/watch-tower/internal/adapter/repository/postgres"
+	redisrepo "github.com/V4T54L/watch-tower/internal/adapter/repository/redis"
+	"github.com/V4T54L/watch-tower/internal/adapter/repository/wal"
+	"github.com/V4T54L/watch-tower/internal/pkg/config"
+	"github.com/V4T54L/watch-tower/internal/pkg/logger"
+	"github.com/V4T54L/watch-tower/internal/usecase"
 
 	_ "github.com/lib/pq" // Keep for postgres driver
 )
@@ -145,4 +145,3 @@ func main() {
 
 	logger.Info("servers shut down gracefully")
 }
-

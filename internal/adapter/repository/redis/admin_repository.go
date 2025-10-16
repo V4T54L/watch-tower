@@ -8,8 +8,8 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/V4T54L/watch-tower/internal/domain"
 	"github.com/redis/go-redis/v9"
-	"github.com/user/log-ingestor/internal/domain"
 )
 
 // AdminRepository implements the domain.StreamAdminRepository interface for Redis.
@@ -73,7 +73,7 @@ func (r *AdminRepository) GetPendingSummary(ctx context.Context, stream, group s
 	summary := &domain.PendingMessageSummary{
 		Total:          pending.Count,
 		FirstMessageID: pending.Lower,
-		LastMessageID:  pending.Upper,
+		LastMessageID:  pending.Higher,
 		ConsumerTotals: pending.Consumers,
 	}
 	return summary, nil
@@ -150,4 +150,3 @@ func (r *AdminRepository) AcknowledgeMessages(ctx context.Context, stream, group
 func (r *AdminRepository) TrimStream(ctx context.Context, stream string, maxLen int64) (int64, error) {
 	return r.client.XTrimMaxLen(ctx, stream, maxLen).Result()
 }
-

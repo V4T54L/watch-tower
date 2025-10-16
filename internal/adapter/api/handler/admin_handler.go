@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/user/log-ingestor/internal/usecase"
+	"github.com/V4T54L/watch-tower/internal/usecase"
 )
 
 // AdminHandler handles HTTP requests for stream administration.
@@ -208,4 +208,3 @@ func (h *AdminHandler) respondWithJSON(w http.ResponseWriter, code int, payload 
 	w.WriteHeader(code)
 	w.Write(response)
 }
-

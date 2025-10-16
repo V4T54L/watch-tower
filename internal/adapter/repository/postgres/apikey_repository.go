@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/user/log-ingestor/internal/adapter/metrics"
+	"github.com/V4T54L/watch-tower/internal/adapter/metrics"
 )
 
 type cacheEntry struct {
@@ -85,4 +85,3 @@ func (r *APIKeyRepository) IsValid(ctx context.Context, key string) (bool, error
 
 	return isValid, nil
 }
-

@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/user/log-ingestor/internal/domain"
+	"github.com/V4T54L/watch-tower/internal/domain"
 )
 
 // MockLogRepository is a mock implementation of domain.LogRepository for testing.
@@ -70,4 +70,3 @@ func (m *MockLogRepository) MoveToDLQ(ctx context.Context, events []domain.LogEv
 	m.DLQEvents = append(m.DLQEvents, events...)
 	return nil
 }
-

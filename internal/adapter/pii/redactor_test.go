@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/user/log-ingestor/internal/domain"
+	"github.com/V4T54L/watch-tower/internal/domain"
 )
 
 func TestRedactor(t *testing.T) {
@@ -13,46 +13,46 @@ func TestRedactor(t *testing.T) {
 	redactor := NewRedactor([]string{"email", "ssn"}, logger)
 
 	tests := []struct {
-		name              string
-		inputMetadata     string
-		expectedMetadata  string
-		expectRedacted    bool
-		expectErr         bool
+		name             string
+		inputMetadata    string
+		expectedMetadata string
+		expectRedacted   bool
+		expectErr        bool
 	}{
 		{
-			name:              "Redact single field",
-			inputMetadata:     `{"email": "test@example.com", "user_id": 123}`,
-			expectedMetadata:  `{"email":"[REDACTED]","user_id":123}`,
-			expectRedacted:    true,
-			expectErr:         false,
+			name:             "Redact single field",
+			inputMetadata:    `{"email": "test@example.com", "user_id": 123}`,
+			expectedMetadata: `{"email":"[REDACTED]","user_id":123}`,
+			expectRedacted:   true,
+			expectErr:        false,
 		},
 		{
-			name:              "Redact multiple fields",
-			inputMetadata:     `{"email": "test@example.com", "ssn": "000-00-0000"}`,
-			expectedMetadata:  `{"email":"[REDACTED]","ssn":"[REDACTED]"}`,
-			expectRedacted:    true,
-			expectErr:         false,
+			name:             "Redact multiple fields",
+			inputMetadata:    `{"email": "test@example.com", "ssn": "000-00-0000"}`,
+			expectedMetadata: `{"email":"[REDACTED]","ssn":"[REDACTED]"}`,
+			expectRedacted:   true,
+			expectErr:        false,
 		},
 		{
-			name:              "No fields to redact",
-			inputMetadata:     `{"user_id": 123, "action": "login"}`,
-			expectedMetadata:  `{"action":"login","user_id":123}`,
-			expectRedacted:    false,
-			expectErr:         false,
+			name:             "No fields to redact",
+			inputMetadata:    `{"user_id": 123, "action": "login"}`,
+			expectedMetadata: `{"action":"login","user_id":123}`,
+			expectRedacted:   false,
+			expectErr:        false,
 		},
 		{
-			name:              "Empty metadata",
-			inputMetadata:     `{}`,
-			expectedMetadata:  `{}`,
-			expectRedacted:    false,
-			expectErr:         false,
+			name:             "Empty metadata",
+			inputMetadata:    `{}`,
+			expectedMetadata: `{}`,
+			expectRedacted:   false,
+			expectErr:        false,
 		},
 		{
-			name:              "Invalid JSON metadata",
-			inputMetadata:     `{"email": "test@example.com"`,
-			expectedMetadata:  "",
-			expectRedacted:    false,
-			expectErr:         true,
+			name:             "Invalid JSON metadata",
+			inputMetadata:    `{"email": "test@example.com"`,
+			expectedMetadata: "",
+			expectRedacted:   false,
+			expectErr:        true,
 		},
 	}
 
@@ -96,4 +96,3 @@ func TestRedactor(t *testing.T) {
 		})
 	}
 }
-
