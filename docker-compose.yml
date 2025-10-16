@@ -1,20 +1,18 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16-alpine
     container_name: log_ingestor_postgres
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-logs}
-      POSTGRES_USER: ${POSTGRES_USER:-user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: logs
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
     ports:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./migrations:/docker-entrypoint-initdb.d
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user} -d ${POSTGRES_DB:-logs}" ]
+      test: [ "CMD-SHELL", "pg_isready -U user -d logs" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -43,8 +41,21 @@ services:
     ports:
       - "8080:8080" # Ingest API
       - "9091:9091" # Admin/Metrics API
-    env_file:
-      - .env
+    environment:
+      LOG_LEVEL: info
+      MAX_EVENT_SIZE: "1048576"
+      WAL_PATH: /app/wal
+      WAL_SEGMENT_SIZE: "104857600"
+      WAL_MAX_DISK_SIZE: "1073741824"
+      BACKPRESSURE_POLICY: block
+      REDIS_ADDR: redis://log_ingestor_redis:6379
+      REDIS_DLQ_STREAM: log_events_dlq
+      POSTGRES_URL: postgres://user:password@log_ingestor_postgres:5432/logs?sslmode=disable
+      API_KEY_CACHE_TTL: 5m
+      PII_REDACTION_FIELDS: email,password,credit_card,ssn
+      INGEST_SERVER_ADDR: ":8080"
+      CONSUMER_RETRY_COUNT: "3"
+      CONSUMER_RETRY_BACKOFF: 1s
     volumes:
       - ./wal:/app/wal # Mount WAL directory for persistence and inspection
     depends_on:
@@ -58,11 +69,15 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.consumer
-    container_name: log_ingestor_consumer
     deploy:
-      replicas: 2 # Example of scaling consumers
-    env_file:
-      - .env
+      replicas: 2
+    environment:
+      LOG_LEVEL: info
+      REDIS_ADDR: redis://log_ingestor_redis:6379
+      POSTGRES_URL: postgres://user:password@log_ingestor_postgres:5432/logs?sslmode=disable
+      CONSUMER_RETRY_COUNT: "3"
+      CONSUMER_RETRY_BACKOFF: 1s
+      PII_REDACTION_FIELDS: email,password,credit_card,ssn
     depends_on:
       postgres:
         condition: service_healthy
