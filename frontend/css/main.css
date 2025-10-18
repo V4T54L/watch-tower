@@ -1,0 +1,109 @@
+:root {
+    --bg-color: #1a1a1a;
+    --card-bg-color: #2a2a2a;
+    --text-color: #e0e0e0;
+    --primary-color: #00bfff;
+    --green: #4caf50;
+    --yellow: #ffeb3b;
+    --red: #f44336;
+    --border-color: #444;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    margin: 0;
+    padding: 2rem;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+}
+
+.container {
+    width: 100%;
+    max-width: 800px;
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 1rem;
+}
+
+h1 {
+    color: var(--primary-color);
+    margin: 0;
+}
+
+.status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+#status-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    transition: background-color 0.3s ease;
+}
+
+#status-indicator.connected { background-color: var(--green); }
+#status-indicator.reconnecting { background-color: var(--yellow); }
+#status-indicator.error { background-color: var(--red); }
+
+.metric-card {
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem 2rem;
+}
+
+.metric-card h2 {
+    margin-top: 0;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.metric-card p {
+    font-size: 2rem;
+    margin: 0 0 1.5rem 0;
+    text-align: center;
+}
+
+#ingest-rate {
+    font-weight: bold;
+    color: var(--primary-color);
+}
+
+#sparkline-container {
+    height: 100px;
+    background-color: #111;
+    border-radius: 4px;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+}
+
+#sparkline {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    gap: 2px;
+    overflow: hidden;
+}
+
+.sparkline-bar {
+    flex: 1 1 0;
+    background-color: var(--primary-color);
+    opacity: 0.7;
+    transition: height 0.2s ease-out;
+}
+
